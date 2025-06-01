@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:todo_app/services/db_helper.dart';
-import 'package:todo_app/widgets/add_todo_sheet_widget.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/todo_provider.dart';
+import '../services/db_helper.dart';
+import 'add_update_todo_screen.dart';
 
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({super.key});
@@ -10,123 +13,105 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
-  DBHelper? dbHelper;
-  List<Map<String, dynamic>> todos = [];
-
   @override
   void initState() {
     super.initState();
-    dbHelper = DBHelper.getInstance();
-    getAllToDos();
-  }
-
-  getAllToDos() async {
-    todos = await dbHelper!.fetchAllToDos();
-    setState(() {});
-  }
-
-  onToDoStatusUpdate(bool? value, int index) async {
-    await dbHelper!.updateToDoStatus(
-      todoId: todos[index][DBHelper.todoIDColumn] ?? -1,
-      isComplete: value == true ? 1 : 0,
-    );
-    getAllToDos();
-  }
-
-  onToDoTextUpdate(String text, int index) async {
-    await dbHelper!.updateToDoText(
-      todoId: todos[index][DBHelper.todoIDColumn] ?? -1,
-      text: text,
-    );
-    getAllToDos();
-  }
-
-  onToDoDelete(int index) async {
-    await dbHelper!.deleteToDo(
-      todoId: todos[index][DBHelper.todoIDColumn] ?? -1,
-    );
-    getAllToDos();
+    // Provider.of<TodoProvider>(context, listen: false).init();
+    context.read<TodoProvider>().init();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("TODO List")),
-      body:
-          todos.isNotEmpty
-              ? ListView.builder(
-                shrinkWrap: true,
-                itemCount: todos.length,
-                itemBuilder: (context, index) {
-                  return Row(
-                    children: [
-                      Checkbox(
-                        value:
-                            (todos[index][DBHelper.todoCompletedColumn] ?? 0) ==
-                            1,
-                        onChanged: (value) => onToDoStatusUpdate(value, index),
+      body: Consumer<TodoProvider>(
+        builder: (context, provider, _) {
+          if (context.watch<TodoProvider>().todos.isEmpty) {
+            // if (provider.todos.isEmpty) {
+            return Center(
+              child: Text(
+                "No TODOs yet!!",
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            );
+          }
+          return ListView.builder(
+            shrinkWrap: true,
+            itemCount: provider.todos.length,
+            itemBuilder: (context, index) {
+              return Row(
+                children: [
+                  Checkbox(
+                    value:
+                        (provider.todos[index][DBHelper.todoCompletedColumn] ??
+                            0) ==
+                        1,
+                    onChanged:
+                        (value) => provider.onToDoStatusUpdate(value, index),
+                  ),
+                  Expanded(
+                    child: Text(
+                      provider.todos[index][DBHelper.todoTitleColumn] ?? "",
+                      style: TextStyle(
+                        decoration:
+                            (provider.todos[index][DBHelper
+                                            .todoCompletedColumn] ??
+                                        0) ==
+                                    1
+                                ? TextDecoration.lineThrough
+                                : null,
                       ),
-                      Expanded(
-                        child: Text(
-                          todos[index][DBHelper.todoTitleColumn] ?? "",
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isDismissible: false,
-                            isScrollControlled: true,
-                            builder: (context) {
-                              return AddTodoSheetWidget(
-                                onSave: (title) async {
-                                  await dbHelper!.updateToDoText(
-                                    todoId:
-                                        todos[index][DBHelper.todoIDColumn] ??
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder:
+                              (_) => AddUpdateTodoScreen(
+                                onSave: (title) {
+                                  provider.onUpdateSave(
+                                    id:
+                                        provider.todos[index][DBHelper
+                                            .todoIDColumn] ??
                                         -1,
-                                    text: title.trim(),
+                                    title: title.trim(),
                                   );
-                                  await getAllToDos();
                                 },
                                 oldText:
-                                    todos[index][DBHelper.todoTitleColumn] ??
+                                    provider.todos[index][DBHelper
+                                        .todoTitleColumn] ??
                                     "",
                                 isUpdating: true,
-                              );
-                            },
-                          );
-                        },
-                        icon: Icon(Icons.edit, color: Colors.green),
-                      ),
-                      IconButton(
-                        onPressed: () => onToDoDelete(index),
-                        icon: Icon(Icons.delete, color: Colors.red),
-                      ),
-                    ],
-                  );
-                },
-              )
-              : Center(
-                child: Text(
-                  "No TODOs yet!!",
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-              ),
+                              ),
+                        ),
+                      );
+                    },
+                    icon: Icon(Icons.edit, color: Colors.green),
+                  ),
+                  IconButton(
+                    onPressed: () => provider.onToDoDelete(index),
+                    icon: Icon(Icons.delete, color: Colors.red),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         shape: CircleBorder(),
         onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isDismissible: false,
-            isScrollControlled: true,
-            builder: (context) {
-              return AddTodoSheetWidget(
-                onSave: (title) async {
-                  await dbHelper!.addToDo(title: title.trim());
-                  await getAllToDos();
-                },
-              );
-            },
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder:
+                  (_) => AddUpdateTodoScreen(
+                    onSave:
+                        (title) => context.read<TodoProvider>().onAddSave(
+                          title: title.trim(),
+                        ),
+                  ),
+            ),
           );
         },
         child: Icon(Icons.add),
